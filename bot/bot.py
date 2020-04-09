@@ -1,66 +1,77 @@
 from telegram.ext import Updater, InlineQueryHandler, CommandHandler
-import requests
-import re
+from telegram import ParseMode, KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove, ChatAction
 import configparser
+from telegram_info.search import Search
 
 config = configparser.ConfigParser()
-config.read("config.ini")
+config.read("../telegram_info/config.ini")
 
 token = config['Telegram']['token']
 
-def get_url():
-    contents = requests.get('https://random.dog/woof.json').json()
-    url = contents['url']
-    return url
-
-
-def get_image_url():
-    allowed_extension = ['jpg', 'jpeg', 'png']
-    file_extension = ''
-    while file_extension not in allowed_extension:
-        url = get_url()
-        file_extension = re.search("([^.]*)$", url).group(1).lower()
-    return url
-
-
-def list_public_chat():
-    pass
-
-
-def process_query():
-    pass
-
 
 def search(bot, update):  # search for a query
+    top_n = 2
+    global searcher
     chat_id = update.message.chat_id
     chat_text = update.message.text
+    bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
     query = chat_text.split()[1:]
     query = ' '.join(query)
-    bot.send_message(chat_id=chat_id, text=query)
+    # process query
+    relevant_messages = searcher.search(query)
+    bot.send_message(chat_id=chat_id, text=f'Search results for: *{query}*',
+                     parse_mode=ParseMode.MARKDOWN)
+    for msg in relevant_messages[:top_n]:
+        bot.send_message(chat_id=chat_id, text=msg)
+
+    menu_options = [[KeyboardButton('/c Show more')],
+                    [KeyboardButton('/c Do not show')]]
+    keyboard = ReplyKeyboardMarkup(menu_options)
+    bot.send_message(chat_id=update.message.chat_id,
+                     text='wow',
+                     parse_mode=ParseMode.MARKDOWN,
+                     reply_markup=keyboard)
 
 
 def start(bot, update):
     chat_id = update.message.chat_id
-    bot.send_message(chat_id=chat_id, text='Hello! I will help you to search in public channels. ')
+    bot.send_message(chat_id=chat_id, text='Hello! I will help you to search in public telegram channels. \n'
+                                           'Send /search your query to search in channels. ')
 
 
-def bop(bot, update):
-    url = get_image_url()
+def clear_search(bot, update):
     chat_id = update.message.chat_id
-    bot.send_photo(chat_id=chat_id, photo=url)
+    menu_options = [[KeyboardButton('/c Show more')],
+                    [KeyboardButton('/c Do not show')]]
+    keyboard = ReplyKeyboardRemove(menu_options)
+    bot.send_message(chat_id=update.message.chat_id,
+                     text='wow',
+                     parse_mode=ParseMode.MARKDOWN,
+                     reply_markup=keyboard)
+
+
+def button_commands(bot, update):
+    chat_id = update.message.chat_id
+    chat_text = update.message.text
+    command = chat_text.split()[1:]
+    command = ' '.join(command)
+
+    if command == 'Show more':
+        pass
+    elif command == 'Do not show':
+        clear_search(bot, update)
 
 
 def main():
-    pass
-    # this is for bot activities
-    # updater = Updater(token)
-    # dp = updater.dispatcher
-    # dp.add_handler(CommandHandler('bop', bop))
-    # dp.add_handler(CommandHandler('start', start))
-    # dp.add_handler(CommandHandler('search', search))
-    # updater.start_polling()
-    # updater.idle()
+    updater = Updater(token)
+    dp = updater.dispatcher
+    dp.add_handler(CommandHandler('start', start))
+    dp.add_handler(CommandHandler('search', search))
+    dp.add_handler(CommandHandler('c', button_commands))
+    updater.start_polling()
+    updater.idle()
 
 
 if __name__ == '__main__':
+    searcher = Search(path_to_index='../telegram_info/index.pickle')
     main()

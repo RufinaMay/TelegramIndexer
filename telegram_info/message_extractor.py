@@ -25,7 +25,7 @@ class MessageExtractor:
 
         # define some constants to limit the messages read
         self.limit = 100  # maximum messages that we can read during one session
-        self.total_count_limit = 300  # how many messages in total we will consider from each chat
+        self.total_count_limit = 100  # how many messages in total we will consider from each chat
 
     async def authorize(self):
         if await self.client.is_user_authorized() == False:

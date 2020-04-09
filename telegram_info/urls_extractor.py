@@ -1,38 +1,14 @@
 import nltk
-from nltk.stem import WordNetLemmatizer
-from collections import Counter
 import pickle
 import time
 from telegram_info.message_extractor import MessageExtractor
+from preprocessing.message_parser import MessageParser
 
 nltk.download('wordnet')
 
 """
 This file is capable for indexing
 """
-
-class MessageParser:
-    @staticmethod
-    def lemmatize(word):
-        lemmatizer = WordNetLemmatizer()
-        return lemmatizer.lemmatize(word)
-
-    def word_preprocess(self, word):
-        words = nltk.word_tokenize(word)
-        return [self.lemmatize(w.lower()) for w in words if w.isalpha()]
-
-    def parse_message(self, msg):
-        links = set()
-        all_words = []
-        for word in msg.split():
-            if word.startswith('@'):
-                # add it to links
-                links.add(f'https://t.me/{word[1:]}')
-            # process the word and add to index
-            words = self.word_preprocess(word)
-            all_words += words
-        # print(links)
-        return Counter(all_words), links
 
 
 class TelegramIndexer:
