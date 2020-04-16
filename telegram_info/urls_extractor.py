@@ -1,6 +1,8 @@
 import nltk
 import pickle
 import time
+import os
+import psutil
 from telegram_info.message_extractor import MessageExtractor
 from preprocessing.message_parser import MessageParser
 
@@ -17,6 +19,7 @@ class TelegramIndexer:
         self.visited_links = set()  # to keep track of links that we are going to visit during next iteration
         self.links_to_visit = set()  # to keep track of links that we are traveling through during current iteration
         self.index = {}
+        self.process = psutil.Process(os.getpid())
 
     def index_one_url(self, url, messages):
         if url in self.visited_links:
@@ -53,6 +56,10 @@ class TelegramIndexer:
                 if not len(messages):
                     continue
                 self.index_one_url(url, messages)
+                print(f'memory {self.process.memory_info().rss * 1e-9} Gb')
+                break
+            memory = self.process.memory_info().rss * 1e-9
+            if memory>5: # if more than 5 Gb then break
                 break
         # finished indexing, save it to disk
         self.save_index()
