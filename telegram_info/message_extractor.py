@@ -3,6 +3,9 @@ from telethon.errors import SessionPasswordNeededError
 import configparser
 from telethon.tl.functions.messages import GetHistoryRequest
 from telethon.tl.types import PeerChannel
+import time
+import logging
+from telegram_info.urls_extractor import TelegramIndexer
 
 
 # TODO: in this file add exception handler
@@ -24,8 +27,20 @@ class MessageExtractor:
         self.client = TelegramClient(username, api_id, api_hash)
 
         # define some constants to limit the messages read
-        self.limit = 100  # maximum messages that we can read during one session
-        self.total_count_limit = 100  # how many messages in total we will consider from each chat
+        self.limit = 2  # maximum messages that we can read during one session
+        self.total_count_limit = 5  # how many messages in total we will consider from each chat
+
+        # define the indexer that will process all messages and them into index
+        self.indexer = TelegramIndexer()
+
+        # define logger
+        self.logger = logging.getLogger("message_extractor")
+        self.logger.setLevel(logging.INFO)
+        fh = logging.FileHandler("../logs/indexer.log")
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        fh.setFormatter(formatter)
+        self.logger.addHandler(fh)
+        self.logger.info("Message extractor started")
 
     async def authorize(self):
         if await self.client.is_user_authorized() == False:
@@ -35,22 +50,22 @@ class MessageExtractor:
             except SessionPasswordNeededError:
                 await self.client.sign_in(password=input('Password: '))
 
-    async def get_channel_data(self, chanel_url):
+    async def get_channel_data(self, channel_url):
         """
-
-        :param chanel_url:
+        :param channel_url:
         :return:
         """
         await self.client.start()
-        print("Client Created")
-
-        # Ensure you're authorized
-        self.authorize()
+        self.logger.info('Client Created')
+        self.authorize()  # Ensure you're authorized
+        self.logger.info('Authorization complete')
 
         me = await self.client.get_me()
-        my_channel = await self.client.get_entity(chanel_url)
-        all_messages = {}
+        my_channel = await self.client.get_entity(channel_url)
         offset_id = 0
+        total_messages = 0
+
+        self.logger.info(f'Starting indexing url {channel_url}')
 
         while True:
             history = await self.client(GetHistoryRequest(
@@ -64,40 +79,63 @@ class MessageExtractor:
                 hash=0
             ))
             if not history.messages:
+                self.logger.info(f'No more messages found for url {channel_url}')
                 break
+
             messages = history.messages
+            all_messages = {}
             for message in messages:
-                # print(message.to_dict())
                 message_dict = message.to_dict()
-                # print(message_dict)
-                # print('============================================================================')
                 message_content = ''
                 try:
                     message_content = message_dict['message']
                 except KeyError:
                     pass
                 message_id = message_dict['id']
-                all_messages[f'{chanel_url}/{message_id}'] = message_content
+                all_messages[f'{channel_url}/{message_id}'] = message_content
+            self.logger.info(f'{len(all_messages)} messages found for url {channel_url}')
             offset_id = messages[len(messages) - 1].id
-            total_messages = len(all_messages)
+            total_messages += len(all_messages)
+
+            self.indexer.index_one_url(channel_url, all_messages)  # index messages that we just read
+
             if self.total_count_limit != 0 and total_messages >= self.total_count_limit:
+                self.logger.info(f'Total number of messages ({self.total_count_limit}) reached, stop parsing url {channel_url}')
                 break
 
         return all_messages
 
     def extract_all_messages(self, url):
         """
-
-        :param urls: list of telegram channel urls
+        :param url: list of telegram channel urls
         :return:
         """
         with self.client:
-            try: messages = self.client.loop.run_until_complete(self.get_channel_data(url))
-            except: messages = ''
+            try:
+                messages = self.client.loop.run_until_complete(self.get_channel_data(url))
+            except:
+                messages = []
         return messages
 
+    def index_first_time(self):  # ОТВЕЧАЕТ ЗА ИНДЕКСАЦИЮ ВСЕГО ПРОЦЕССА В ПЕРВЫЙ РАЗ
+        base_url = 'https://t.me/Links'  # the public channel that we are going to start with
+        self.indexer.links_to_visit.add(base_url)  # we are starting parsing from this url
+        self.index_telegram_channels()
+
+    def keep_index_updated(self):
+        self.indexer.links_to_visit = self.indexer.visited_links
+        self.indexer.visited_links = set()  # to keep track of links that we are going to visit during next iteration
+        self.index_telegram_channels()
+
+    def index_telegram_channels(self):
+        while len(self.indexer.links_to_visit):
+            for url in self.indexer.links_to_visit:
+                self.extract_all_messages(url)
+                self.indexer.dump_index()
+                break
 
 if __name__ == '__main__':
     msg_extract = MessageExtractor()
-    url_message = msg_extract.extract_all_messages('https://t.me/Links')
-    print(url_message)
+    msg_extract.index_first_time()
+    time.sleep(100)
+    msg_extract.keep_index_updated()

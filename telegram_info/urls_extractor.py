@@ -3,7 +3,9 @@ import pickle
 import time
 import os
 import psutil
-from telegram_info.message_extractor import MessageExtractor
+from pymongo import MongoClient
+import logging
+# from telegram_info.message_extractor import MessageExtractor
 from preprocessing.message_parser import MessageParser
 
 nltk.download('wordnet')
@@ -20,13 +22,33 @@ class TelegramIndexer:
         self.links_to_visit = set()  # to keep track of links that we are traveling through during current iteration
         self.index = {}
         self.process = psutil.Process(os.getpid())
+        self.database_empty = True
+
+        # create logger
+        self.logger = logging.getLogger("urls_extractor")
+        self.logger.setLevel(logging.INFO)
+        fh = logging.FileHandler("../logs/indexer.log")
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        fh.setFormatter(formatter)
+        self.logger.addHandler(fh)
+
+        try:
+            client = MongoClient()
+            client = MongoClient("mongodb://localhost:27017/")
+            self.logger.info('Connected to MongoDB successfully!!')
+        except:
+            self.logger.error('Could not connect to MongoDB')
+
+        self.database = client.TelegramIndexerDB
 
     def index_one_url(self, url, messages):
         if url in self.visited_links:
             self.links_to_visit.discard(url)
+            self.logger.info(f'Url {url} was already indexed. Move in to another url')
             return
+
+        self.logger.info(f'Indexing messages from url {url}')
         for msg_url, msg_text in messages.items():
-            # print(f'message url {msg_url}')
             words, links = self.parser.parse_message(msg_text)
             self.links_to_visit.update(links)
             self.links_to_visit -= self.visited_links
@@ -41,39 +63,80 @@ class TelegramIndexer:
         self.visited_links.add(url)
         self.links_to_visit.discard(url)
 
-    def save_index(self):
-        with open('index.pickle', 'wb') as f:
-            pickle.dump(self.index, f)
-
-    def index_telegram_channels(self):  # ОТВЕЧАЕТ ЗА ИНДЕКСАЦИЮ ВСЕГО ПРОЦЕССА
-        base_url = 'https://t.me/Links'  # the public channel that we are going to start with
-        msg_extract = MessageExtractor()
-        messages = msg_extract.extract_all_messages(base_url)  # dictionary, for url contains all messages in that url
-        self.links_to_visit.add(base_url)  # we are starting parsing from this url
-        while len(self.links_to_visit):
-            for url in self.links_to_visit:
-                messages = msg_extract.extract_all_messages(url)
-                if not len(messages):
-                    continue
-                self.index_one_url(url, messages)
-                print(f'memory {self.process.memory_info().rss * 1e-9} Gb')
+    def dump_index(self):
+        if self.database_empty:
+            cursor = self.database.Index.find()
+            i = 0
+            for record in cursor:
+                i += 1
                 break
-            memory = self.process.memory_info().rss * 1e-9
-            if memory>5: # if more than 5 Gb then break
-                break
-        # finished indexing, save it to disk
-        self.save_index()
+            if i > 0:
+                self.database_empty = False
 
-        # then sleep and run this indexing process again
-        # time.sleep(10) # for a week
-        # надо как то мониторить чтобы сообщения не посторяльсь, либо сделать dict в dict
-        # print(self.index['language'])
+        if self.database_empty:
+            self.logger.info(f'Database was empty, writing {len(self.index)} new items')
+            for word, postings in self.index.items():
+                try: self.database.Index.insert_one(
+                    {'key': word, 'frequency': postings[0], 'postings': postings[1:]}
+                )
+                except:
+                    self.logger.error(f'Unable to add new items to database')
+            self.index = {}  # local index is gonna be empty
+            return
 
+        # Else, we have to merge new changes to existing index
+        self.logger.info(f'Update database with new items')
+        for word, postings in self.index.items():
+            cursor = self.database.Index.records.find({'key': word})
+            # 1. get existing index from db
+            db_index = {}
+            for record in cursor:
+                db_index = record
 
-if __name__ == '__main__':
-    indexer = TelegramIndexer()
-    indexer.index_telegram_channels()
-    # with open('index.pickle', 'rb') as f:
-    #     index = pickle.load(f)
+            if not db_index:
+                self.database.Index.insert_one(
+                    {'key': word, 'frequency': postings[0], 'postings': postings[1:]}
+                )
+            else:
+                self.logger.info(f'Changing existing postings')
+                db_postings = db_index['postings']
+                db_postings = {u: f for u, f in db_postings}
+                for doc_url, doc_freq in postings:
+                    db_postings[doc_url] = doc_freq
+                db_postings = [(u, f) for u, f in db_postings.items()]
+                frequency = db_index['frequency']
+                myquery = {{'key': word}}
+                newvalues = {"$set": {'frequency': db_postings, 'postings': db_postings}}
+                try:
+                    self.database.Index.update_one(myquery, newvalues)
+                    self.logger.info('Postings changed successfully')
+                except:
+                    self.logger.error('Postings were not changes, error while writing to database')
+
+    # def index_first_time(self):  # ОТВЕЧАЕТ ЗА ИНДЕКСАЦИЮ ВСЕГО ПРОЦЕССА В ПЕРВЫЙ РАЗ
+    #     base_url = 'https://t.me/Links'  # the public channel that we are going to start with
+    #     self.links_to_visit.add(base_url)  # we are starting parsing from this url
+    #     self.index_telegram_channels()
     #
-    # print(index['course'])
+    # def index_telegram_channels(self):
+    #     msg_extract = MessageExtractor()
+    #     while len(self.links_to_visit):
+    #         for url in self.links_to_visit:
+    #             messages = msg_extract.extract_all_messages(url)
+    #             if not len(messages):
+    #                 continue
+    #             # print(messages)
+    #             self.index_one_url(url, messages)
+    #             self.dump_index()
+    #             break
+    #
+    # def keep_index_updated(self):
+    #     self.links_to_visit = self.visited_links
+    #     self.visited_links = set()  # to keep track of links that we are going to visit during next iteration
+    #     self.index_telegram_channels()
+
+# if __name__ == '__main__':
+#     indexer = TelegramIndexer()
+#     indexer.index_first_time()
+#     time.sleep(100)
+#     indexer.keep_index_updated()

@@ -11,7 +11,7 @@ token = config['Telegram']['token']
 
 class RufIndexer:
     def __init__(self):
-        self.searcher = Search(path_to_index='../telegram_info/index.pickle')
+        self.searcher = Search()
         self.search_results = {}
         self.menu_options = [[KeyboardButton('/c Show more')],
                              [KeyboardButton('/c Do not show')]]
