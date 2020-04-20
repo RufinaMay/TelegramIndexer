@@ -1,6 +1,4 @@
 import nltk
-import pickle
-import time
 import os
 import psutil
 from pymongo import MongoClient
@@ -47,6 +45,11 @@ class TelegramIndexer:
             self.logger.info(f'Url {url} was already indexed. Move in to another url')
             return
 
+        if not len(messages):
+            self.links_to_visit.discard(url)
+            print(f'Message list is empty for url {url}')
+            return
+
         self.logger.info(f'Indexing messages from url {url}')
         for msg_url, msg_text in messages.items():
             words, links = self.parser.parse_message(msg_text)
@@ -87,13 +90,12 @@ class TelegramIndexer:
         # Else, we have to merge new changes to existing index
         self.logger.info(f'Update database with new items')
         for word, postings in self.index.items():
-            cursor = self.database.Index.records.find({'key': word})
+            cursor = self.database.Index.find({'key': word})
             # 1. get existing index from db
             db_index = {}
             for record in cursor:
                 db_index = record
-
-            if not db_index:
+            if not len(db_index):
                 self.database.Index.insert_one(
                     {'key': word, 'frequency': postings[0], 'postings': postings[1:]}
                 )
@@ -101,12 +103,12 @@ class TelegramIndexer:
                 self.logger.info(f'Changing existing postings')
                 db_postings = db_index['postings']
                 db_postings = {u: f for u, f in db_postings}
-                for doc_url, doc_freq in postings:
+                for doc_url, doc_freq in postings[1:]:
                     db_postings[doc_url] = doc_freq
-                db_postings = [(u, f) for u, f in db_postings.items()]
+                db_postings = [[u, f] for u, f in db_postings.items()]
                 frequency = db_index['frequency']
-                myquery = {{'key': word}}
-                newvalues = {"$set": {'frequency': db_postings, 'postings': db_postings}}
+                myquery = {'key': word}
+                newvalues = {"$set": {'frequency': frequency, 'postings': db_postings}}
                 try:
                     self.database.Index.update_one(myquery, newvalues)
                     self.logger.info('Postings changed successfully')

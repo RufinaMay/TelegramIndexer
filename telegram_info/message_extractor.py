@@ -96,11 +96,11 @@ class MessageExtractor:
             self.logger.info(f'{len(all_messages)} messages found for url {channel_url}')
             offset_id = messages[len(messages) - 1].id
             total_messages += len(all_messages)
-
             self.indexer.index_one_url(channel_url, all_messages)  # index messages that we just read
 
             if self.total_count_limit != 0 and total_messages >= self.total_count_limit:
-                self.logger.info(f'Total number of messages ({self.total_count_limit}) reached, stop parsing url {channel_url}')
+                self.logger.info(
+                    f'Total number of messages ({self.total_count_limit}) reached, stop parsing url {channel_url}')
                 break
 
         return all_messages
@@ -131,11 +131,14 @@ class MessageExtractor:
         while len(self.indexer.links_to_visit):
             for url in self.indexer.links_to_visit:
                 self.extract_all_messages(url)
-                self.indexer.dump_index()
+                self.indexer.dump_index() # dump index happens every time we finish indexing one channel
                 break
+
 
 if __name__ == '__main__':
     msg_extract = MessageExtractor()
     msg_extract.index_first_time()
+    msg_extract.logger.info('Indexer is turning to keep track on changes since now')
+    print('Indexer is turning to keep track on changes since now')
     time.sleep(100)
     msg_extract.keep_index_updated()
