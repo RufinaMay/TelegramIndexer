@@ -1,10 +1,10 @@
-from telegram.ext import Updater, InlineQueryHandler, CommandHandler
+from telegram.ext import Updater, CommandHandler
 from telegram import ParseMode, KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove, ChatAction
 import configparser
-from telegram_info.search import Search
+from search_procedure.search import Search
 
 config = configparser.ConfigParser()
-config.read("../telegram_info/config.ini")
+config.read("../telegram_indexing/config.ini")
 
 token = config['Telegram']['token']
 
