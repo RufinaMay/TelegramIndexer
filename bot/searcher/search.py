@@ -1,7 +1,9 @@
 from pymongo import MongoClient
 import math
+import os
+import logging
 from collections import Counter
-from preprocessing.message_parser import MessageParser
+from message_parser import MessageParser
 
 
 class Search:
@@ -9,16 +11,28 @@ class Search:
         self.parser = MessageParser()
         try:
             client = MongoClient()
-            client = MongoClient("mongodb://localhost:27017/")
+            client = MongoClient("mongodb://localhost:27018/")
             print('Connected to MongoDB successfully!!')
         except:
             print('Could not connect to MongoDB')
 
         self.database = client.TelegramIndexerDB
 
+        # define separate logger for searcher and bot logger
+        if not os.path.exists('../../logs'):
+            os.makedirs('../../logs')
+
+        self.logger = logging.getLogger("searcher")
+        self.logger.setLevel(logging.INFO)
+        fh = logging.FileHandler("../../logs/user_search.log")
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        fh.setFormatter(formatter)
+        self.logger.addHandler(fh)
+
+
     def search(self, query):
         query_terms, links = self.parser.parse_message(query)
-        # now organize the search in the index
+        # now organize the searcher in the index
         # relevant_documents = self.boolean_retrieval(query_terms)
         relevant_documents = self.okapi_scoring(query_terms)
         return relevant_documents
@@ -60,18 +74,12 @@ class Search:
             for posting in postings:
                 doc_id = posting[0]
                 doc_tf = posting[1]
-
-                cursor = self.database.Index.find({'key': term})
-                for record in cursor:
-                    postings += record['postings']
-                if not len(postings):
-                    continue  # ignore absent terms
-
                 doc_len = 0
                 cursor = self.database.DocLengths.find({'doc_url':doc_id})
                 for record in cursor:
                     doc_len = record['length']
-
+                if not doc_len:
+                    doc_len = 0
                 score = idf * doc_tf * (k1 + 1) / (doc_tf + k1 * (
                             1 - b + b * (doc_len / avgdl)))
                 scores[doc_id] += score

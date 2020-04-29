@@ -3,7 +3,7 @@ import os
 from pymongo import MongoClient
 import logging
 # from telegram_indexing.message_extractor import MessageExtractor
-from preprocessing.message_parser import MessageParser
+from message_parser import MessageParser
 
 nltk.download('wordnet')
 nltk.download('stopwords')
@@ -35,7 +35,7 @@ class TelegramIndexer:
 
         try:
             client = MongoClient()
-            client = MongoClient("mongodb://127.0.0.1:27017/")
+            client = MongoClient("mongodb://127.0.0.1:27018/")
             self.logger.info('Connected to MongoDB successfully!!')
         except:
             self.logger.error('Could not connect to MongoDB')

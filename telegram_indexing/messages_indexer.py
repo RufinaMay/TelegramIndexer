@@ -6,7 +6,7 @@ from telethon.tl.types import PeerChannel
 import time
 import logging
 import os
-from telegram_indexing.urls_extractor import TelegramIndexer
+from urls_extractor import TelegramIndexer
 
 
 # TODO: in this file add exception handler
@@ -29,7 +29,7 @@ class MessageExtractor:
 
         # define some constants to limit the messages read
         self.limit = 100  # maximum messages that we can read during one session
-        self.total_count_limit = 100  # how many messages in total we will consider from each chat
+        self.total_count_limit = 500  # how many messages in total we will consider from each chat
 
         # define the indexer that will process all messages and them into index
         self.indexer = TelegramIndexer()
@@ -41,18 +41,11 @@ class MessageExtractor:
         self.logger = logging.getLogger("message_extractor")
         self.logger.setLevel(logging.INFO)
         fh = logging.FileHandler("../logs/indexer.log")
-        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        formatter = logging.Formatter(
+            '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
         fh.setFormatter(formatter)
         self.logger.addHandler(fh)
         self.logger.info("Message extractor started")
-
-    # async def authorize(self):
-    #     if await self.client.is_user_authorized() == False:
-    #         await self.client.send_code_request(self.phone)
-    #         try:
-    #             await self.client.sign_in(self.phone, input('Enter the code: '))
-    #         except SessionPasswordNeededError:
-    #             await self.client.sign_in(password=input('Password: '))
 
     async def get_channel_data(self, channel_url):
         """
@@ -61,12 +54,13 @@ class MessageExtractor:
         """
         await self.client.start()
         self.logger.info(f'Client Created for url {channel_url}')
-        # self.authorize()  # Ensure you're authorized
 
+        # Ensure you're authorized
         if await self.client.is_user_authorized() == False:
             await self.client.send_code_request(self.phone)
             try:
-                await self.client.sign_in(self.phone, input('Enter the code: '))
+                await self.client.sign_in(self.phone,
+                                          input('Enter the code: '))
             except SessionPasswordNeededError:
                 await self.client.sign_in(password=input('Password: '))
 
@@ -91,7 +85,8 @@ class MessageExtractor:
                 hash=0
             ))
             if not history.messages:
-                self.logger.info(f'No more messages found for url {channel_url}')
+                self.logger.info(
+                    f'No more messages found for url {channel_url}')
                 break
 
             messages = history.messages
@@ -107,13 +102,16 @@ class MessageExtractor:
                 all_messages[f'{channel_url}/{message_id}'] = message_content
 
             if not len(all_messages):
-                self.logger.info(f'No more messages found for url {channel_url}')
+                self.logger.info(
+                    f'No more messages found for url {channel_url}')
                 break
 
-            self.logger.info(f'{len(all_messages)} messages found for url {channel_url}')
+            self.logger.info(
+                f'{len(all_messages)} messages found for url {channel_url}')
             offset_id = messages[len(messages) - 1].id
             total_messages += len(all_messages)
-            self.indexer.index_one_url(channel_url, all_messages)  # index messages that we just read
+            self.indexer.index_one_url(channel_url,
+                                       all_messages)  # index messages that we just read
 
             if self.total_count_limit != 0 and total_messages >= self.total_count_limit:
                 self.logger.info(
@@ -129,14 +127,17 @@ class MessageExtractor:
         """
         with self.client:
             try:
-                messages = self.client.loop.run_until_complete(self.get_channel_data(url))
+                messages = self.client.loop.run_until_complete(
+                    self.get_channel_data(url))
             except:
                 messages = []
         return messages
 
-    def index_first_time(self):  # ОТВЕЧАЕТ ЗА ИНДЕКСАЦИЮ ВСЕГО ПРОЦЕССА В ПЕРВЫЙ РАЗ
+    def index_first_time(
+            self):  # ОТВЕЧАЕТ ЗА ИНДЕКСАЦИЮ ВСЕГО ПРОЦЕССА В ПЕРВЫЙ РАЗ
         base_url = 'https://t.me/Links'  # the public channel that we are going to start with
-        self.indexer.links_to_visit.add(base_url)  # we are starting parsing from this url
+        self.indexer.links_to_visit.add(
+            base_url)  # we are starting parsing from this url
         self.index_telegram_channels()
 
     def keep_index_updated(self):
@@ -149,16 +150,18 @@ class MessageExtractor:
         while len(self.indexer.links_to_visit):
             for url in self.indexer.links_to_visit:
                 self.extract_all_messages(url)
-                self.indexer.dump_index() # dump index happens every time we finish indexing one channel
+                self.indexer.dump_index()  # dump index happens every time we finish indexing one channel
                 break
-            if len(self.indexer.visited_links)>3:
+            if len(self.indexer.visited_links) > 100:
                 break
 
 
 if __name__ == '__main__':
     msg_extract = MessageExtractor()
     msg_extract.index_first_time()
-    msg_extract.logger.info('Indexer is turning to keep track on changes since now')
+    msg_extract.logger.info(
+        'Indexer is turning to keep track on changes since now')
     print('Indexer is turning to keep track on changes since now')
-    # time.sleep(5)
-    msg_extract.keep_index_updated()
+    while True:
+        time.sleep(86400)
+        msg_extract.keep_index_updated()

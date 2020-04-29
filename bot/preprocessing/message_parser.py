@@ -5,7 +5,7 @@ from spellchecker import SpellChecker
 from nltk.corpus import stopwords
 
 nltk.download('wordnet')
-
+nltk.download('stopwords')
 
 class MessageParser:
     def __init__(self):
