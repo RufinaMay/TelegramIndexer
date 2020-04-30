@@ -34,13 +34,12 @@ class TelegramIndexer:
         self.logger.addHandler(fh)
 
         try:
-            client = MongoClient()
-            client = MongoClient("mongodb://127.0.0.1:27018/")
+            client = MongoClient("mongodb://127.0.0.1:27017/")
             self.logger.info('Connected to MongoDB successfully!!')
         except:
             self.logger.error('Could not connect to MongoDB')
 
-        self.database = client.TelegramIndexerDB
+        self.database = client.TelegramMusicIndexerDB
 
     def index_one_url(self, url, messages):
         if url in self.visited_links:

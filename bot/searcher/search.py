@@ -10,13 +10,12 @@ class Search:
     def __init__(self):
         self.parser = MessageParser()
         try:
-            client = MongoClient()
-            client = MongoClient("mongodb://localhost:27018/")
+            client = MongoClient("mongodb://127.0.0.1:27017/")
             print('Connected to MongoDB successfully!!')
         except:
             print('Could not connect to MongoDB')
 
-        self.database = client.TelegramIndexerDB
+        self.database = client.TelegramMusicIndexerDB
 
         # define separate logger for searcher and bot logger
         if not os.path.exists('../../logs'):

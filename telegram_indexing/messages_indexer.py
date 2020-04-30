@@ -29,7 +29,7 @@ class MessageExtractor:
 
         # define some constants to limit the messages read
         self.limit = 100  # maximum messages that we can read during one session
-        self.total_count_limit = 500  # how many messages in total we will consider from each chat
+        self.total_count_limit = 1000  # how many messages in total we will consider from each chat
 
         # define the indexer that will process all messages and them into index
         self.indexer = TelegramIndexer()
@@ -94,17 +94,36 @@ class MessageExtractor:
             for message in messages:
                 message_dict = message.to_dict()
                 message_content = ''
+                media_mime_type = ''
+                audio_title = ''
+                audio_performer = ''
                 try:
                     message_content = message_dict['message']
+                    message_media = message_dict['media']['document']
+                    media_mime_type = message_media['mime_type']
                 except KeyError:
                     pass
-                message_id = message_dict['id']
-                all_messages[f'{channel_url}/{message_id}'] = message_content
+                # we will index this item if it is a song
+                if 'audio' in media_mime_type:
+                    print(f'audio file detected')
+                    try:
+                        message_media_attributes = message_media['attributes']
+                        audio_title = message_media_attributes['title']
+                        audio_performer = message_media_attributes['performer']
+                    except KeyError:
+                        pass
+                    # add new songs to all messages
+                    message_id = message_dict['id']
+                    all_messages[
+                        f'{channel_url}/{message_id}'] = message_content + audio_title + audio_performer
 
             if not len(all_messages):
                 self.logger.info(
                     f'No more messages found for url {channel_url}')
                 break
+            else:
+                self.logger.info(
+                    f'{len(all_messages)} messages were found for url {channel_url}')
 
             self.logger.info(
                 f'{len(all_messages)} messages found for url {channel_url}')
@@ -135,9 +154,9 @@ class MessageExtractor:
 
     def index_first_time(
             self):  # ОТВЕЧАЕТ ЗА ИНДЕКСАЦИЮ ВСЕГО ПРОЦЕССА В ПЕРВЫЙ РАЗ
-        base_url = 'https://t.me/Links'  # the public channel that we are going to start with
-        self.indexer.links_to_visit.add(
-            base_url)  # we are starting parsing from this url
+        self.indexer.links_to_visit = {'https://t.me/muzikys',
+                                       'https://t.me/Links',
+                                       'https://t.me/music_muzyka'}  # the public channel that we are going to start with
         self.index_telegram_channels()
 
     def keep_index_updated(self):
@@ -152,7 +171,7 @@ class MessageExtractor:
                 self.extract_all_messages(url)
                 self.indexer.dump_index()  # dump index happens every time we finish indexing one channel
                 break
-            if len(self.indexer.visited_links) > 100:
+            if len(self.indexer.visited_links) > 1000:
                 break
 
 
@@ -162,6 +181,6 @@ if __name__ == '__main__':
     msg_extract.logger.info(
         'Indexer is turning to keep track on changes since now')
     print('Indexer is turning to keep track on changes since now')
-    while True:
-        time.sleep(86400)
-        msg_extract.keep_index_updated()
+    # while True:
+    #     time.sleep(86400)
+    #     msg_extract.keep_index_updated()
