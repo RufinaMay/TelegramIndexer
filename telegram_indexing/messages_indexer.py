@@ -29,7 +29,7 @@ class MessageExtractor:
 
         # define some constants to limit the messages read
         self.limit = 100  # maximum messages that we can read during one session
-        self.total_count_limit = 1000  # how many messages in total we will consider from each chat
+        self.total_count_limit = 2000  # how many messages in total we will consider from each chat
 
         # define the indexer that will process all messages and them into index
         self.indexer = TelegramIndexer()
@@ -68,6 +68,7 @@ class MessageExtractor:
 
         me = await self.client.get_me()
         my_channel = await self.client.get_entity(channel_url)
+        self.logger.info(f'channel entity got for url {channel_url}')
         offset_id = 0
         total_messages = 0
 
@@ -90,6 +91,8 @@ class MessageExtractor:
                 break
 
             messages = history.messages
+            self.logger.info(
+                f'message historu object has been extracted for url {channel_url}')
             all_messages = {}
             for message in messages:
                 message_dict = message.to_dict()
@@ -105,7 +108,6 @@ class MessageExtractor:
                     pass
                 # we will index this item if it is a song
                 if 'audio' in media_mime_type:
-                    print(f'audio file detected')
                     try:
                         message_media_attributes = message_media['attributes']
                         audio_title = message_media_attributes['title']
@@ -156,6 +158,7 @@ class MessageExtractor:
             self):  # ОТВЕЧАЕТ ЗА ИНДЕКСАЦИЮ ВСЕГО ПРОЦЕССА В ПЕРВЫЙ РАЗ
         self.indexer.links_to_visit = {'https://t.me/muzikys',
                                        'https://t.me/Links',
+                                       '',
                                        'https://t.me/music_muzyka'}  # the public channel that we are going to start with
         self.index_telegram_channels()
 
@@ -181,6 +184,7 @@ if __name__ == '__main__':
     msg_extract.logger.info(
         'Indexer is turning to keep track on changes since now')
     print('Indexer is turning to keep track on changes since now')
-    # while True:
-    #     time.sleep(86400)
-    #     msg_extract.keep_index_updated()
+    while True:
+        time.sleep(86400)
+        msg_extract.logger.info('New iteration of indexing started')
+        msg_extract.keep_index_updated()

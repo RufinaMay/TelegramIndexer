@@ -18,11 +18,11 @@ class MessageParser:
         return lemmatizer.lemmatize(word)
 
     def is_apt_word(self, word):
-        return word not in self.stop_words and word.isalpha()
+        return word not in self.stop_words # and word.isalpha()
 
     def word_preprocess(self, word):
-        words = nltk.word_tokenize(word)
-        return [self.lemmatize(self.spell_check.correction(w).lower()) for w in words if self.is_apt_word(w)]
+        words = nltk.word_tokenize(word.lower())
+        return [self.lemmatize(self.spell_check.correction(w)) for w in words if self.is_apt_word(w)]
 
     def parse_message(self, msg):
         links = set()
