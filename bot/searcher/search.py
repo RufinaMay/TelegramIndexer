@@ -15,7 +15,7 @@ class Search:
         except:
             print('Could not connect to MongoDB')
 
-        self.database = client.TelegramMusicIndexerDB
+        self.database = client.TelegramIndexerDB # client.TelegramMusicIndexerDB
 
         # define separate logger for searcher and bot logger
         if not os.path.exists('../../logs'):

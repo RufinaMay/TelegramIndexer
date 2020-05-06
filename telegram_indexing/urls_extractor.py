@@ -39,12 +39,12 @@ class TelegramIndexer:
         except:
             self.logger.error('Could not connect to MongoDB')
 
-        self.database = client.TelegramMusicIndexerDB
+        self.database = client.TelegramIndexerDB #client.TelegramMusicIndexerDB
 
     def index_one_url(self, url, messages):
         if url in self.visited_links:
             self.links_to_visit.discard(url)
-            self.logger.info(f'Url {url} was already indexed. Move in to another url')
+            self.logger.info(f'Url {url} was already indexed. Move on to another url')
             return
 
         if not len(messages):
@@ -101,7 +101,7 @@ class TelegramIndexer:
             return
 
         # Else, we have to merge new changes to existing index
-        self.logger.info(f'Updating Index in database with new items')
+        self.logger.info(f'Updating Index in database with {len(self.index)} new items')
         for word, postings in self.index.items():
             cursor = self.database.Index.find({'key': word})
             # 1. get existing index from db
